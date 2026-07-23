@@ -14,6 +14,9 @@ import SubscriptionApproval from "./Pages/SubscriptionApproval";
 import SubscriptionPlans from "./Pages/SubscriptionPlans";
 import SuperAdminPaymentHistoryScreen from "./Pages/PaymentHistory";
 import SuperAdminReports from "./Pages/ReportsPage";
+import Categories from "./Pages/Categories";
+import Brands from "./Pages/Brands";
+import MasterProducts from "./Pages/Products";
 
 
 
@@ -108,8 +111,20 @@ function App() {
             path="reports" 
             element={<SuperAdminReports />} 
           />
+ <Route 
+            path="categories" 
+            element={<Categories />} 
+          />
+ <Route 
+            path="brands" 
+            element={<Brands />} 
+          />
 
 
+ <Route 
+            path="products" 
+            element={<MasterProducts />} 
+          />
 
           {/* Settings */}
 

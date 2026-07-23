@@ -368,6 +368,24 @@ onClick={closeMenu}
 Payments
 </NavLink>
 
+<NavLink 
+to="/admin/categories"
+onClick={closeMenu}
+>
+Categories
+</NavLink>
+<NavLink 
+to="/admin/brands"
+onClick={closeMenu}
+>
+Brands
+</NavLink>
+<NavLink 
+to="/admin/products"
+onClick={closeMenu}
+>
+Products
+</NavLink>
 
 
 <NavLink 
