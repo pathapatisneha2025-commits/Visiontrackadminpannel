@@ -386,13 +386,18 @@ onClick={closeMenu}
 >
 Products
 </NavLink>
-
-
 <NavLink 
-to="/admin/reports"
+to="/admin/products"
 onClick={closeMenu}
 >
-Reports
+Products
+</NavLink>
+
+<NavLink 
+to="/admin/orders"
+onClick={closeMenu}
+>
+Orders
 </NavLink>
 
 

@@ -17,6 +17,7 @@ import SuperAdminReports from "./Pages/ReportsPage";
 import Categories from "./Pages/Categories";
 import Brands from "./Pages/Brands";
 import MasterProducts from "./Pages/Products";
+import PurchaseOrders from "./Pages/PurchaseOrders";
 
 
 
@@ -126,6 +127,11 @@ function App() {
             element={<MasterProducts />} 
           />
 
+
+ <Route 
+            path="orders" 
+            element={<PurchaseOrders />} 
+          />
           {/* Settings */}
 
           {/* <Route 
