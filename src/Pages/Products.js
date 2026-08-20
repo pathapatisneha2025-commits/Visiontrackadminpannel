@@ -1,660 +1,1262 @@
-import React,{useState,useEffect} from "react";
+import React, { useEffect, useState } from "react";
 
-function MasterProducts(){
+const API_BASE =
+  "https://visiontrackdatabase.onrender.com";
 
-const [categories,setCategories]=useState([]);
-const [brands,setBrands]=useState([]);
-const [products,setProducts]=useState([]);
+const ProductApproval = () => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [filter, setFilter] = useState("pending");
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
-const [mobile,setMobile]=useState(false);
+  // =====================================================
+  // FETCH PRODUCTS
+  // =====================================================
 
-// EDIT STATE
-const [editId,setEditId]=useState(null);
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
 
-const [form,setForm]=useState({
-category_id:"",
-brand_id:"",
-product_name:"",
-description:"",
-variants:[
-{
-color:"",
-price:"",
-sku:"",
-image:null,
-preview:""
-}
-]
-});
+      const response = await fetch(
+        `${API_BASE}/products/adminall`
+      );
 
-useEffect(()=>{
-checkScreen();
-window.addEventListener("resize",checkScreen);
-loadCategories();
-loadBrands();
-loadProducts();
+      const data = await response.json();
 
-return()=>{
-window.removeEventListener("resize",checkScreen);
+      if (data?.success) {
+        setProducts(
+          Array.isArray(data.data)
+            ? data.data
+            : []
+        );
+      } else {
+        setProducts([]);
+      }
+    } catch (error) {
+      console.error(
+        "FETCH PRODUCTS ERROR:",
+        error
+      );
+
+      alert("Failed to load products");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  // =====================================================
+  // APPROVE / REJECT
+  // =====================================================
+
+  const handleApproval = async (
+    productId,
+    status
+  ) => {
+    const action =
+      status === "approved"
+        ? "approve"
+        : "reject";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to ${action} this product?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setActionLoading(productId);
+
+      const response = await fetch(
+        `${API_BASE}/products/approval/${productId}`,
+        {
+          method: "PUT",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            status,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (data?.success) {
+        alert(
+          status === "approved"
+            ? "Product approved successfully."
+            : "Product rejected successfully."
+        );
+
+        setSelectedProduct(null);
+
+        await fetchProducts();
+      } else {
+        alert(
+          data?.message ||
+            `Failed to ${action} product`
+        );
+      }
+    } catch (error) {
+      console.error(
+        "APPROVAL ERROR:",
+        error
+      );
+
+      alert(
+        `Unable to ${action} product`
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // =====================================================
+  // FILTER
+  // =====================================================
+
+  const filteredProducts =
+    products.filter((product) => {
+      const status =
+        product.approval_status ||
+        product.status ||
+        "pending";
+
+      if (filter === "all") {
+        return true;
+      }
+
+      return status === filter;
+    });
+
+  // =====================================================
+  // STATUS
+  // =====================================================
+
+  const getStatus = (product) => {
+    return (
+      product.approval_status ||
+      product.status ||
+      "pending"
+    );
+  };
+
+  const getStatusClass = (status) => {
+    if (status === "approved") {
+      return "status-approved";
+    }
+
+    if (status === "rejected") {
+      return "status-rejected";
+    }
+
+    return "status-pending";
+  };
+
+  // =====================================================
+  // VARIANTS
+  // =====================================================
+
+  const getVariants = (product) => {
+    if (!product.variants) {
+      return [];
+    }
+
+    if (Array.isArray(product.variants)) {
+      return product.variants;
+    }
+
+    try {
+      return JSON.parse(
+        product.variants
+      );
+    } catch {
+      return [];
+    }
+  };
+
+  // =====================================================
+  // RENDER
+  // =====================================================
+
+  return (
+    <div className="approval-page">
+
+      {/* ============================================= */}
+      {/* HEADER */}
+      {/* ============================================= */}
+
+      <div className="page-header">
+
+        <div>
+          <h1>
+            Product Approval
+          </h1>
+
+          <p>
+            Review products submitted by
+            stores before publishing them.
+          </p>
+        </div>
+
+        <button
+          className="refresh-btn"
+          onClick={fetchProducts}
+          disabled={loading}
+        >
+          ↻ Refresh
+        </button>
+
+      </div>
+
+      {/* ============================================= */}
+      {/* FILTER TABS */}
+      {/* ============================================= */}
+
+      <div className="filter-container">
+
+        <button
+          className={
+            filter === "pending"
+              ? "filter-btn active"
+              : "filter-btn"
+          }
+          onClick={() =>
+            setFilter("pending")
+          }
+        >
+          Pending
+          <span>
+            {
+              products.filter(
+                (p) =>
+                  getStatus(p) ===
+                  "pending"
+              ).length
+            }
+          </span>
+        </button>
+
+        <button
+          className={
+            filter === "approved"
+              ? "filter-btn active"
+              : "filter-btn"
+          }
+          onClick={() =>
+            setFilter("approved")
+          }
+        >
+          Approved
+          <span>
+            {
+              products.filter(
+                (p) =>
+                  getStatus(p) ===
+                  "approved"
+              ).length
+            }
+          </span>
+        </button>
+
+        <button
+          className={
+            filter === "rejected"
+              ? "filter-btn active"
+              : "filter-btn"
+          }
+          onClick={() =>
+            setFilter("rejected")
+          }
+        >
+          Rejected
+          <span>
+            {
+              products.filter(
+                (p) =>
+                  getStatus(p) ===
+                  "rejected"
+              ).length
+            }
+          </span>
+        </button>
+
+        <button
+          className={
+            filter === "all"
+              ? "filter-btn active"
+              : "filter-btn"
+          }
+          onClick={() =>
+            setFilter("all")
+          }
+        >
+          All
+          <span>
+            {products.length}
+          </span>
+        </button>
+
+      </div>
+
+      {/* ============================================= */}
+      {/* CONTENT */}
+      {/* ============================================= */}
+
+      {loading ? (
+        <div className="loading-box">
+          <div className="spinner"></div>
+
+          <p>
+            Loading products...
+          </p>
+        </div>
+      ) : filteredProducts.length ===
+        0 ? (
+        <div className="empty-box">
+
+          <div className="empty-icon">
+            📦
+          </div>
+
+          <h2>
+            No products found
+          </h2>
+
+          <p>
+            There are no{" "}
+            {filter} products at the
+            moment.
+          </p>
+
+        </div>
+      ) : (
+
+        <div className="product-grid">
+
+          {filteredProducts.map(
+            (product) => {
+
+              const status =
+                getStatus(product);
+
+              const variants =
+                getVariants(product);
+
+              const firstImage =
+                variants?.[0]?.image;
+
+              return (
+                <div
+                  className="product-card"
+                  key={product.id}
+                >
+
+                  {/* IMAGE */}
+
+                  <div className="product-image">
+
+                    {firstImage ? (
+                      <img
+                        src={firstImage}
+                        alt={
+                          product.product_name
+                        }
+                      />
+                    ) : (
+                      <div className="no-image">
+                        📦
+                      </div>
+                    )}
+
+                    <span
+                      className={`status-badge ${getStatusClass(
+                        status
+                      )}`}
+                    >
+                      {status
+                        .charAt(0)
+                        .toUpperCase() +
+                        status.slice(1)}
+                    </span>
+
+                  </div>
+
+                  {/* INFO */}
+
+                  <div className="product-info">
+
+                    <div className="product-category">
+                      {product.category ||
+                        "No Category"}
+                    </div>
+
+                    <h3>
+                      {product.product_name}
+                    </h3>
+
+                    <p className="brand">
+                      Brand:{" "}
+                      <strong>
+                        {product.brand ||
+                          "No Brand"}
+                      </strong>
+                    </p>
+
+                    <p className="description">
+                      {product.description ||
+                        "No description available."}
+                    </p>
+
+                    {/* VARIANTS */}
+
+                    {variants.length >
+                      0 && (
+                      <div className="variants">
+
+                        <strong>
+                          Variants
+                        </strong>
+
+                        <div className="variant-list">
+
+                          {variants.map(
+                            (
+                              variant,
+                              index
+                            ) => (
+                              <div
+                                className="variant"
+                                key={
+                                  index
+                                }
+                              >
+
+                                {variant.image ? (
+                                  <img
+                                    src={
+                                      variant.image
+                                    }
+                                    alt={
+                                      variant.color
+                                    }
+                                  />
+                                ) : (
+                                  <div className="variant-placeholder">
+                                    —
+                                  </div>
+                                )}
+
+                                <div>
+                                  <div>
+                                    {variant.color ||
+                                      "Default"}
+                                  </div>
+
+                                  <strong>
+                                    ₹
+                                    {variant.price ||
+                                      "0"}
+                                  </strong>
+                                </div>
+
+                              </div>
+                            )
+                          )}
+
+                        </div>
+
+                      </div>
+                    )}
+
+                    {/* ACTIONS */}
+
+                    <div className="action-row">
+
+                      <button
+                        className="view-btn"
+                        onClick={() =>
+                          setSelectedProduct(
+                            product
+                          )
+                        }
+                      >
+                        View
+                      </button>
+
+                      {status ===
+                        "pending" && (
+                        <>
+                          <button
+                            className="reject-btn"
+                            disabled={
+                              actionLoading ===
+                              product.id
+                            }
+                            onClick={() =>
+                              handleApproval(
+                                product.id,
+                                "rejected"
+                              )
+                            }
+                          >
+                            {actionLoading ===
+                            product.id
+                              ? "..."
+                              : "Reject"}
+                          </button>
+
+                          <button
+                            className="approve-btn"
+                            disabled={
+                              actionLoading ===
+                              product.id
+                            }
+                            onClick={() =>
+                              handleApproval(
+                                product.id,
+                                "approved"
+                              )
+                            }
+                          >
+                            {actionLoading ===
+                            product.id
+                              ? "..."
+                              : "Approve"}
+                          </button>
+                        </>
+                      )}
+
+                    </div>
+
+                  </div>
+
+                </div>
+              );
+            }
+          )}
+
+        </div>
+      )}
+
+      {/* ============================================= */}
+      {/* PRODUCT MODAL */}
+      {/* ============================================= */}
+
+      {selectedProduct && (
+        <div
+          className="modal-overlay"
+          onClick={() =>
+            setSelectedProduct(null)
+          }
+        >
+
+          <div
+            className="product-modal"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+
+            <div className="modal-header">
+
+              <div>
+                <h2>
+                  {
+                    selectedProduct.product_name
+                  }
+                </h2>
+
+                <p>
+                  Product Details
+                </p>
+              </div>
+
+              <button
+                className="close-btn"
+                onClick={() =>
+                  setSelectedProduct(
+                    null
+                  )
+                }
+              >
+                ×
+              </button>
+
+            </div>
+
+            <div className="modal-content">
+
+              <div className="detail-row">
+                <span>
+                  Category
+                </span>
+
+                <strong>
+                  {
+                    selectedProduct.category ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div className="detail-row">
+                <span>
+                  Brand
+                </span>
+
+                <strong>
+                  {
+                    selectedProduct.brand ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div className="detail-row">
+                <span>
+                  Status
+                </span>
+
+                <strong
+                  className={getStatusClass(
+                    getStatus(
+                      selectedProduct
+                    )
+                  )}
+                >
+                  {getStatus(
+                    selectedProduct
+                  )}
+                </strong>
+              </div>
+
+              <div className="description-box">
+
+                <h4>
+                  Description
+                </h4>
+
+                <p>
+                  {
+                    selectedProduct.description ||
+                    "No description"
+                  }
+                </p>
+
+              </div>
+
+              <h4>
+                Variants
+              </h4>
+
+              <div className="modal-variants">
+
+                {getVariants(
+                  selectedProduct
+                ).map(
+                  (
+                    variant,
+                    index
+                  ) => (
+                    <div
+                      className="modal-variant"
+                      key={index}
+                    >
+
+                      {variant.image && (
+                        <img
+                          src={
+                            variant.image
+                          }
+                          alt=""
+                        />
+                      )}
+
+                      <div>
+                        <strong>
+                          {
+                            variant.color
+                          }
+                        </strong>
+
+                        <p>
+                          Price: ₹
+                          {
+                            variant.price ||
+                            "0"
+                          }
+                        </p>
+
+                        {variant.sku && (
+                          <p>
+                            SKU:{" "}
+                            {
+                              variant.sku
+                            }
+                          </p>
+                        )}
+                      </div>
+
+                    </div>
+                  )
+                )}
+
+              </div>
+
+            </div>
+
+            {getStatus(
+              selectedProduct
+            ) === "pending" && (
+
+              <div className="modal-actions">
+
+                <button
+                  className="reject-btn"
+                  onClick={() =>
+                    handleApproval(
+                      selectedProduct.id,
+                      "rejected"
+                    )
+                  }
+                >
+                  Reject Product
+                </button>
+
+                <button
+                  className="approve-btn"
+                  onClick={() =>
+                    handleApproval(
+                      selectedProduct.id,
+                      "approved"
+                    )
+                  }
+                >
+                  Approve Product
+                </button>
+
+              </div>
+
+            )}
+
+          </div>
+
+        </div>
+      )}
+
+      {/* ============================================= */}
+      {/* CSS */}
+      {/* ============================================= */}
+
+      <style>{`
+
+        * {
+          box-sizing: border-box;
+        }
+
+        .approval-page {
+          min-height: 100vh;
+          background: #f4f7fb;
+          padding: 25px;
+          font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+        }
+
+        .page-header {
+          background: #ffffff;
+          border-radius: 16px;
+          padding: 22px 25px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+          margin-bottom: 20px;
+          box-shadow:
+            0 3px 15px
+            rgba(0,0,0,0.06);
+        }
+
+        .page-header h1 {
+          margin: 0;
+          color: #0f172a;
+          font-size: 25px;
+        }
+
+        .page-header p {
+          margin: 6px 0 0;
+          color: #64748b;
+          font-size: 14px;
+        }
+
+        .refresh-btn {
+          border: none;
+          background: #2563eb;
+          color: white;
+          padding: 11px 18px;
+          border-radius: 9px;
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .refresh-btn:hover {
+          background: #1d4ed8;
+        }
+
+        .filter-container {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-bottom: 20px;
+        }
+
+        .filter-btn {
+          border: 1px solid #dbe3ef;
+          background: white;
+          color: #475569;
+          padding: 10px 16px;
+          border-radius: 9px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+
+        .filter-btn span {
+          margin-left: 7px;
+          background: #e2e8f0;
+          padding: 2px 7px;
+          border-radius: 20px;
+          font-size: 11px;
+        }
+
+        .filter-btn.active {
+          background: #2563eb;
+          color: white;
+          border-color: #2563eb;
+        }
+
+        .filter-btn.active span {
+          background: white;
+          color: #2563eb;
+        }
+
+        .product-grid {
+          display: grid;
+          grid-template-columns:
+            repeat(
+              auto-fill,
+              minmax(300px, 1fr)
+            );
+          gap: 18px;
+        }
+
+        .product-card {
+          background: white;
+          border-radius: 15px;
+          overflow: hidden;
+          box-shadow:
+            0 3px 15px
+            rgba(0,0,0,0.06);
+          border: 1px solid #e2e8f0;
+        }
+
+        .product-image {
+          height: 190px;
+          background: #f8fafc;
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .product-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 15px;
+        }
+
+        .no-image {
+          font-size: 50px;
+          color: #94a3b8;
+        }
+
+        .status-badge {
+          position: absolute;
+          top: 12px;
+          right: 12px;
+          padding: 5px 10px;
+          border-radius: 20px;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .status-pending {
+          background: #fef3c7;
+          color: #92400e;
+        }
+
+        .status-approved {
+          background: #dcfce7;
+          color: #166534;
+        }
+
+        .status-rejected {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+
+        .product-info {
+          padding: 17px;
+        }
+
+        .product-category {
+          color: #2563eb;
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+        }
+
+        .product-info h3 {
+          margin: 5px 0;
+          color: #0f172a;
+          font-size: 18px;
+        }
+
+        .brand {
+          margin: 5px 0;
+          color: #64748b;
+          font-size: 13px;
+        }
+
+        .description {
+          color: #64748b;
+          font-size: 13px;
+          line-height: 19px;
+          min-height: 38px;
+        }
+
+        .variants {
+          margin-top: 12px;
+        }
+
+        .variants > strong {
+          font-size: 13px;
+          color: #334155;
+        }
+
+        .variant-list {
+          display: flex;
+          gap: 7px;
+          overflow-x: auto;
+          margin-top: 8px;
+        }
+
+        .variant {
+          flex-shrink: 0;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 5px;
+          display: flex;
+          gap: 6px;
+          align-items: center;
+          min-width: 120px;
+          font-size: 11px;
+        }
+
+        .variant img,
+        .variant-placeholder {
+          width: 40px;
+          height: 40px;
+          object-fit: contain;
+          border-radius: 5px;
+          background: #f8fafc;
+        }
+
+        .variant-placeholder {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .action-row {
+          display: flex;
+          gap: 7px;
+          margin-top: 15px;
+        }
+
+        .action-row button {
+          border: none;
+          border-radius: 8px;
+          padding: 10px 12px;
+          cursor: pointer;
+          font-weight: 700;
+          flex: 1;
+        }
+
+        .view-btn {
+          background: #eff6ff;
+          color: #1d4ed8;
+        }
+
+        .approve-btn {
+          background: #16a34a;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 10px 15px;
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .approve-btn:hover {
+          background: #15803d;
+        }
+
+        .reject-btn {
+          background: #dc2626;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          padding: 10px 15px;
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .reject-btn:hover {
+          background: #b91c1c;
+        }
+
+        button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .loading-box,
+        .empty-box {
+          background: white;
+          border-radius: 15px;
+          padding: 60px 20px;
+          text-align: center;
+          color: #64748b;
+        }
+
+        .empty-icon {
+          font-size: 45px;
+          margin-bottom: 10px;
+        }
+
+        .empty-box h2 {
+          color: #334155;
+          margin: 5px;
+        }
+
+        .spinner {
+          width: 35px;
+          height: 35px;
+          border: 4px solid #dbeafe;
+          border-top-color: #2563eb;
+          border-radius: 50%;
+          animation:
+            spin 0.8s linear infinite;
+          margin: auto;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        /* ========================================= */
+        /* MODAL */
+        /* ========================================= */
+
+        .modal-overlay {
+          position: fixed;
+          inset: 0;
+          background:
+            rgba(15,23,42,0.65);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+          z-index: 9999;
+        }
+
+        .product-modal {
+          width: 100%;
+          max-width: 650px;
+          max-height: 90vh;
+          overflow-y: auto;
+          background: white;
+          border-radius: 18px;
+          box-shadow:
+            0 20px 50px
+            rgba(0,0,0,0.25);
+        }
+
+        .modal-header {
+          padding: 20px;
+          border-bottom:
+            1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .modal-header h2 {
+          margin: 0;
+          color: #0f172a;
+        }
+
+        .modal-header p {
+          margin: 4px 0 0;
+          color: #64748b;
+          font-size: 13px;
+        }
+
+        .close-btn {
+          width: 38px;
+          height: 38px;
+          border: none;
+          border-radius: 50%;
+          background: #f1f5f9;
+          font-size: 25px;
+          cursor: pointer;
+          color: #475569;
+        }
+
+        .modal-content {
+          padding: 20px;
+        }
+
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          gap: 20px;
+          padding: 10px 0;
+          border-bottom:
+            1px solid #f1f5f9;
+        }
+
+        .detail-row span {
+          color: #64748b;
+        }
+
+        .detail-row strong {
+          color: #0f172a;
+        }
+
+        .description-box {
+          background: #f8fafc;
+          padding: 13px;
+          border-radius: 10px;
+          margin: 15px 0;
+        }
+
+        .description-box h4 {
+          margin: 0 0 5px;
+        }
+
+        .description-box p {
+          margin: 0;
+          color: #64748b;
+          line-height: 20px;
+        }
+
+        .modal-variants {
+          display: grid;
+          grid-template-columns:
+            repeat(
+              auto-fill,
+              minmax(180px, 1fr)
+            );
+          gap: 10px;
+          margin-top: 10px;
+        }
+
+        .modal-variant {
+          border: 1px solid #e2e8f0;
+          border-radius: 10px;
+          padding: 10px;
+          display: flex;
+          gap: 10px;
+        }
+
+        .modal-variant img {
+          width: 70px;
+          height: 70px;
+          object-fit: contain;
+          background: #f8fafc;
+          border-radius: 7px;
+        }
+
+        .modal-variant p {
+          margin: 4px 0;
+          color: #64748b;
+          font-size: 12px;
+        }
+
+        .modal-actions {
+          display: flex;
+          gap: 10px;
+          padding: 15px 20px 20px;
+          border-top:
+            1px solid #e2e8f0;
+        }
+
+        .modal-actions button {
+          flex: 1;
+        }
+
+        @media (max-width: 600px) {
+
+          .approval-page {
+            padding: 12px;
+          }
+
+          .page-header {
+            padding: 17px;
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .page-header h1 {
+            font-size: 21px;
+          }
+
+          .product-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .action-row {
+            flex-wrap: wrap;
+          }
+
+          .action-row button {
+            min-width: 30%;
+          }
+
+          .modal-actions {
+            flex-direction: column;
+          }
+
+        }
+
+      `}</style>
+
+    </div>
+  );
 };
-},[]);
 
-const checkScreen=()=>{
-setMobile(window.innerWidth < 768);
-};
-
-const loadCategories=async()=>{
-const res=await fetch("https://visiontrackdatabase.onrender.com/categories/all");
-const data=await res.json();
-setCategories(data.data || []);
-};
-
-const loadBrands=async()=>{
-const res=await fetch("https://visiontrackdatabase.onrender.com/brands/all");
-const data=await res.json();
-setBrands(data.data || []);
-};
-
-const loadProducts=async()=>{
-const res=await fetch("https://visiontrackdatabase.onrender.com/products/all");
-const data=await res.json();
-setProducts(data.data || []);
-};
-
-const handleChange=(e)=>{
-setForm({
-...form,
-[e.target.name]:e.target.value
-});
-};
-
-const addVariant=()=>{
-setForm({
-...form,
-variants:[
-...form.variants,
-{
-color:"",
-price:"",
-sku:"",
-image:null,
-preview:""
-}
-]
-});
-};
-
-const updateVariant=(index,key,value)=>{
-let updated=[...form.variants];
-updated[index][key]=value;
-setForm({
-...form,
-variants:updated
-});
-};
-
-const handleVariantImage=(index,e)=>{
-const file=e.target.files[0];
-if(file){
-let updated=[...form.variants];
-updated[index].image=file;
-updated[index].preview=URL.createObjectURL(file);
-setForm({
-...form,
-variants:updated
-});
-}
-};
-
-const removeVariant=(index)=>{
-let updated=form.variants.filter((_,i)=>i!==index);
-setForm({
-...form,
-variants:updated
-});
-};
-
-// ==============================
-// ADD PRODUCT
-// ==============================
-
-const saveProduct=async()=>{
-try{
-const formData=new FormData();
-
-formData.append("category_id",form.category_id);
-formData.append("brand_id",form.brand_id);
-formData.append("product_name",form.product_name);
-formData.append("description",form.description);
-
-const variantsMeta=form.variants.map(v=>({
-color:v.color,
-price:v.price,
-sku:v.sku,
-existingImage: typeof v.preview === "string" && !v.image ? v.preview : ""
-}));
-
-formData.append("variants",JSON.stringify(variantsMeta));
-
-form.variants.forEach((v,index)=>{
-if(v.image){
-formData.append(`variant_images_${index}`,v.image);
-}
-});
-
-const res=await fetch(
-"https://visiontrackdatabase.onrender.com/products/add",
-{
-method:"POST",
-body:formData
-}
-);
-
-const data=await res.json();
-
-if(data.success){
-alert("Product Added");
-resetForm();
-loadProducts();
-}
-
-}
-catch(error){
-console.log(error);
-}
-};
-
-// ==============================
-// LOAD PRODUCT FOR EDIT
-// ==============================
-
-const editProduct=(p)=>{
-setEditId(p.id);
-
-const formattedVariants=p.variants && p.variants.length
-? p.variants.map(v=>({
-color:v.color || "",
-price:v.price || "",
-sku:v.sku || "",
-image:null,
-preview:v.image || v.image_url || ""
-}))
-: [
-{
-color:"",
-price:"",
-sku:"",
-image:null,
-preview:""
-}
-];
-
-setForm({
-category_id:p.category_id || "",
-brand_id:p.brand_id || "",
-product_name:p.product_name || "",
-description:p.description || "",
-variants:formattedVariants
-});
-
-window.scrollTo({
-top:0,
-behavior:"smooth"
-});
-};
-
-// ==============================
-// UPDATE PRODUCT
-// ==============================
-
-const updateProduct=async()=>{
-try{
-const formData=new FormData();
-
-formData.append("category_id",form.category_id);
-formData.append("brand_id",form.brand_id);
-formData.append("product_name",form.product_name);
-formData.append("description",form.description);
-
-const variantsMeta=form.variants.map(v=>({
-color:v.color,
-price:v.price,
-sku:v.sku,
-existingImage: typeof v.preview === "string" && !v.image ? v.preview : ""
-}));
-
-formData.append("variants",JSON.stringify(variantsMeta));
-
-form.variants.forEach((v,index)=>{
-if(v.image){
-formData.append(`variant_images_${index}`,v.image);
-}
-});
-
-const res=await fetch(
-`https://visiontrackdatabase.onrender.com/products/update/${editId}`,
-{
-method:"PUT",
-body:formData
-}
-);
-
-const data=await res.json();
-
-if(data.success){
-alert("Product Updated");
-resetForm();
-loadProducts();
-}
-
-}
-catch(error){
-console.log(error);
-}
-};
-
-const resetForm=()=>{
-setEditId(null);
-setForm({
-category_id:"",
-brand_id:"",
-product_name:"",
-description:"",
-variants:[
-{
-color:"",
-price:"",
-sku:"",
-image:null,
-preview:""
-}
-]
-});
-};
-
-return(
-<div style={styles.container}>
-
-<div style={styles.header}>
-<h2>Master Product Management</h2>
-<p>Manage optical products, variant-specific images, colours and inventory</p>
-</div>
-
-<div style={styles.card}>
-<h3 style={styles.cardTitle}>
-{editId ? "Edit Product" : "Add New Product"}
-</h3>
-
-<div
-style={{
-...styles.formGrid,
-gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fit,minmax(250px,1fr))"
-}}
->
-
-<select
-style={styles.input}
-name="category_id"
-value={form.category_id}
-onChange={handleChange}
->
-<option value="">Select Category</option>
-{categories.map(c=>(
-<option key={c.id} value={c.id}>{c.name}</option>
-))}
-</select>
-
-<select
-style={styles.input}
-name="brand_id"
-value={form.brand_id}
-onChange={handleChange}
->
-<option value="">Select Brand</option>
-{brands.map(b=>(
-<option key={b.id} value={b.id}>{b.name}</option>
-))}
-</select>
-
-<input
-style={styles.input}
-name="product_name"
-placeholder="Product Name"
-value={form.product_name}
-onChange={handleChange}
-/>
-
-</div>
-
-<h4 style={{marginTop:"20px"}}>Colours, Images & Price Variants</h4>
-
-{
-form.variants.map((v,index)=>(
-<div
-key={index}
-style={{
-...styles.variantCard,
-gridTemplateColumns: mobile ? "1fr" : "1.2fr 1fr 1fr 1fr auto"
-}}
->
-<label style={styles.variantUploadBox}>
-{
-v.preview ?
-<img src={v.preview} style={styles.preview} alt="Variant Preview" />
-:
-<span>Upload Variant Image</span>
-}
-<input
-type="file"
-accept="image/*"
-onChange={(e)=>handleVariantImage(index,e)}
-style={styles.fileInput}
-/>
-</label>
-
-<input
-style={styles.input}
-placeholder="Colour"
-value={v.color}
-onChange={(e)=>updateVariant(index,"color",e.target.value)}
-/>
-
-<input
-style={styles.input}
-placeholder="Price ₹"
-value={v.price}
-onChange={(e)=>updateVariant(index,"price",e.target.value)}
-/>
-
-<input
-style={styles.input}
-placeholder="SKU"
-value={v.sku}
-onChange={(e)=>updateVariant(index,"sku",e.target.value)}
-/>
-
-{form.variants.length > 1 && (
-<button
-onClick={()=>removeVariant(index)}
-style={styles.removeBtn}
->
-Remove
-</button>
-)}
-</div>
-))
-}
-
-<button
-onClick={addVariant}
-style={styles.addVariant}
->
-+ Add Colour Variant
-</button>
-
-<textarea
-style={styles.textarea}
-name="description"
-placeholder="Product Description"
-value={form.description}
-onChange={handleChange}
-/>
-
-<button
-style={styles.button}
-onClick={editId ? updateProduct : saveProduct}
->
-{editId ? "Update Product" : "+ Add Product"}
-</button>
-
-{editId &&
-<button
-style={styles.cancelBtn}
-onClick={resetForm}
->
-Cancel Edit
-</button>
-}
-
-</div>
-
-<h3 style={styles.heading}>Products</h3>
-
-<div
-style={{
-...styles.grid,
-gridTemplateColumns: mobile ? "1fr" : "repeat(auto-fit,minmax(280px,1fr))"
-}}
->
-{
-products.map(p=>(
-<div key={p.id} style={styles.productCard}>
-<h3>{p.product_name}</h3>
-<button style={styles.editBtn} onClick={()=>editProduct(p)}>Edit</button>
-<p style={styles.brand}>{p.brand}</p>
-<p>Category : <b> {p.category}</b></p>
-
-<h4>Available Variants</h4>
-
-{
-p.variants &&
-p.variants.map((v,i)=>(
-<div key={i} style={styles.variantBox}>
-{(v.image || v.image_url) && (
-<img src={v.image || v.image_url} style={styles.variantThumb} alt={v.color} />
-)}
-<div
-style={{
-width:"20px",
-height:"20px",
-borderRadius:"50%",
-background:v.color,
-border:"1px solid #ccc",
-flexShrink:0
-}}
-/>
-<div style={{textAlign:"left"}}>
-<b>{v.color}</b>
-<p style={styles.price}>₹{v.price}</p>
-<p style={styles.sku}>SKU : {v.sku}</p>
-</div>
-</div>
-))
-}
-</div>
-))
-}
-</div>
-
-</div>
-);
-}
-
-const styles={
-container:{
-padding:"20px",
-background:"#F1F5F9",
-minHeight:"100vh",
-boxSizing:"border-box"
-},
-header:{
-background:"#1D4ED8",
-padding:"22px",
-borderRadius:"18px",
-color:"#fff",
-marginBottom:"25px"
-},
-card:{
-background:"#fff",
-padding:"22px",
-borderRadius:"18px",
-marginBottom:"30px",
-boxShadow:"0 5px 15px rgba(0,0,0,.08)"
-},
-cardTitle:{
-color:"#1D4ED8"
-},
-formGrid:{
-display:"grid",
-gap:"15px"
-},
-input:{
-height:"45px",
-padding:"0 15px",
-border:"1px solid #CBD5E1",
-borderRadius:"10px",
-fontSize:"14px",
-width:"100%",
-boxSizing:"border-box"
-},
-variantCard:{
-display:"grid",
-gap:"10px",
-alignItems:"center",
-background:"#F8FAFC",
-padding:"12px",
-borderRadius:"12px",
-marginBottom:"10px",
-border:"1px solid #E2E8F0"
-},
-variantUploadBox:{
-height:"80px",
-border:"2px dashed #2563EB",
-borderRadius:"10px",
-display:"flex",
-alignItems:"center",
-justifyContent:"center",
-color:"#2563EB",
-position:"relative",
-overflow:"hidden",
-cursor:"pointer",
-background:"#fff",
-fontSize:"12px",
-textAlign:"center"
-},
-fileInput:{
-position:"absolute",
-width:"100%",
-height:"100%",
-opacity:0
-},
-preview:{
-width:"100%",
-height:"100%",
-objectFit:"contain"
-},
-textarea:{
-width:"100%",
-height:"90px",
-marginTop:"15px",
-padding:"15px",
-borderRadius:"12px",
-border:"1px solid #CBD5E1",
-boxSizing:"border-box"
-},
-button:{
-marginTop:"20px",
-background:"#2563EB",
-color:"#fff",
-padding:"14px 35px",
-border:"none",
-borderRadius:"12px",
-fontWeight:"700",
-width:"100%",
-cursor:"pointer"
-},
-addVariant:{
-marginTop:"10px",
-background:"#16A34A",
-color:"#fff",
-padding:"10px 20px",
-border:"none",
-borderRadius:"10px",
-cursor:"pointer",
-fontWeight:"600"
-},
-removeBtn:{
-background:"#DC2626",
-color:"#fff",
-border:"none",
-padding:"10px 15px",
-borderRadius:"8px",
-cursor:"pointer",
-height:"45px"
-},
-heading:{
-color:"#1E3A8A",
-marginTop:"30px",
-marginBottom:"15px"
-},
-grid:{
-display:"grid",
-gap:"20px"
-},
-productCard:{
-background:"#fff",
-padding:"18px",
-borderRadius:"18px",
-boxShadow:"0 5px 15px rgba(0,0,0,.08)",
-display:"flex",
-flexDirection:"column",
-alignItems:"center",
-textAlign:"center"
-},
-brand:{
-color:"#2563EB",
-fontWeight:"700"
-},
-price:{
-color:"#16A34A",
-fontWeight:"700",
-margin:"2px 0"
-},
-sku:{
-color:"#64748B",
-fontSize:"13px",
-margin:0
-},
-variantBox:{
-display:"flex",
-alignItems:"center",
-gap:"12px",
-width:"100%",
-background:"#F8FAFC",
-padding:"10px",
-borderRadius:"12px",
-marginTop:"8px",
-boxSizing:"border-box"
-},
-variantThumb:{
-width:"45px",
-height:"45px",
-objectFit:"contain",
-borderRadius:"6px",
-border:"1px solid #ddd",
-flexShrink:0
-},
-editBtn:{
-background:"#F59E0B",
-color:"#fff",
-border:"none",
-padding:"8px 20px",
-borderRadius:"10px",
-cursor:"pointer",
-fontWeight:"700",
-marginBottom:"10px"
-},
-cancelBtn:{
-marginTop:"10px",
-background:"#64748B",
-color:"#fff",
-padding:"12px",
-border:"none",
-borderRadius:"10px",
-width:"100%",
-cursor:"pointer",
-fontWeight:"700"
-}
-};
-
-export default MasterProducts;
+export default ProductApproval;
