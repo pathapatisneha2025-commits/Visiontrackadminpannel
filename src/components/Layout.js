@@ -413,7 +413,40 @@ onClick={closeMenu}
 Settings
 </NavLink>
 
+<NavLink 
+to="/admin/patients"
+onClick={closeMenu}
+>
+Patient
+</NavLink>
 
+
+<NavLink 
+to="/admin/eyeexam"
+onClick={closeMenu}
+>
+EyeExam
+</NavLink>
+
+<NavLink 
+to="/admin/opticalsales"
+onClick={closeMenu}
+>
+OpticalSales
+</NavLink>
+<NavLink 
+to="/admin/followup"
+onClick={closeMenu}
+>
+Followup
+</NavLink>
+
+<NavLink 
+to="/admin/billing"
+onClick={closeMenu}
+>
+Billing
+</NavLink>
 </div>
 
 

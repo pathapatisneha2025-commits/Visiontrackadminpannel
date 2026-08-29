@@ -18,6 +18,13 @@ import Categories from "./Pages/Categories";
 import Brands from "./Pages/Brands";
 import MasterProducts from "./Pages/Products";
 import PurchaseOrders from "./Pages/PurchaseOrders";
+import Patients from "./Pages/Patients";
+import EyeExam from "./Pages/EyeExam";
+import NewEyeExamination from "./Pages/NewEyeExam";
+import Sales from "./Pages/OpticalSales";
+import NewOrder from "./Pages/NewOrder";
+import BillingOrders from "./Pages/Billing";
+import FollowUpReminders from "./Pages/Followup";
 
 
 
@@ -131,6 +138,36 @@ function App() {
  <Route 
             path="orders" 
             element={<PurchaseOrders />} 
+          />
+
+          <Route 
+            path="patients" 
+            element={<Patients />} 
+          />
+            <Route 
+            path="eyeexam" 
+            element={<EyeExam/>} 
+          />
+           <Route 
+            path="new-eye-examination" 
+            element={<NewEyeExamination/>} 
+          />
+           <Route 
+            path="opticalsales" 
+            element={<Sales/>} 
+          />
+             <Route 
+            path="new-order" 
+            element={<NewOrder/>} 
+          />
+             <Route 
+            path="followup" 
+            element={<FollowUpReminders/>} 
+          />
+
+          <Route 
+            path="billing" 
+            element={<BillingOrders/>} 
           />
           {/* Settings */}
 
