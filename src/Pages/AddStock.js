@@ -1,8 +1,56 @@
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = "https://visiontrackdatabase.onrender.com";
+
+/* =========================================================
+   INPUT FIELD
+   IMPORTANT:
+   This must be OUTSIDE AddStock component.
+========================================================= */
+
+const InputField = ({
+  fieldKey,
+  label,
+  value,
+  onChange,
+  placeholder,
+  required = false,
+  type = "text",
+  inputRefs,
+  handleKeyDown,
+}) => {
+  return (
+    <div className="stock-field">
+      <label htmlFor={fieldKey}>
+        {label}
+        {required && <span className="required-star">*</span>}
+      </label>
+
+      <input
+        id={fieldKey}
+        ref={(element) => {
+          if (element) {
+            inputRefs.current[fieldKey] = element;
+          }
+        }}
+        type={type}
+        value={value}
+        placeholder={placeholder || label}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) =>
+          handleKeyDown(event, fieldKey, value, onChange)
+        }
+        autoComplete="off"
+      />
+    </div>
+  );
+};
+
+/* =========================================================
+   MAIN COMPONENT
+========================================================= */
 
 export default function AddStock() {
   const navigate = useNavigate();
@@ -71,12 +119,6 @@ export default function AddStock() {
 
   const inputRefs = useRef({});
 
-  const setInputRef = (id, element) => {
-    if (element) {
-      inputRefs.current[id] = element;
-    }
-  };
-
   /* =========================================================
      ACTIVE FIELD ORDER
   ========================================================= */
@@ -130,15 +172,6 @@ export default function AddStock() {
   };
 
   /* =========================================================
-     CATEGORY CHANGE
-  ========================================================= */
-
-  const handleCategoryChange = (category) => {
-    setSelectedCategory(category);
-    resetForm();
-  };
-
-  /* =========================================================
      RESET FORM
   ========================================================= */
 
@@ -168,6 +201,22 @@ export default function AddStock() {
     setExpiryDate("");
 
     setAccessoryName("");
+
+    inputRefs.current = {};
+  };
+
+  /* =========================================================
+     CATEGORY CHANGE
+  ========================================================= */
+
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category);
+    resetForm();
+
+    // Put focus back on brand after category changes
+    setTimeout(() => {
+      inputRefs.current.brand?.focus();
+    }, 50);
   };
 
   /* =========================================================
@@ -184,11 +233,19 @@ export default function AddStock() {
 
     const currentIndex = fields.indexOf(fieldKey);
 
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+    /* =====================================================
+       NEXT FIELD
+    ===================================================== */
+
+    if (
+      event.key === "ArrowDown" ||
+      event.key === "ArrowRight" ||
+      event.key === "Enter"
+    ) {
       event.preventDefault();
 
       if (
-        currentIndex !== -1 &&
+        currentIndex >= 0 &&
         currentIndex < fields.length - 1
       ) {
         const nextField = fields[currentIndex + 1];
@@ -199,7 +256,14 @@ export default function AddStock() {
       return;
     }
 
-    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+    /* =====================================================
+       PREVIOUS FIELD
+    ===================================================== */
+
+    if (
+      event.key === "ArrowUp" ||
+      event.key === "ArrowLeft"
+    ) {
       event.preventDefault();
 
       if (currentIndex > 0) {
@@ -212,9 +276,9 @@ export default function AddStock() {
       return;
     }
 
-    /* =======================================================
-       PAGE UP / PAGE DOWN FOR NUMERIC FIELDS
-    ======================================================= */
+    /* =====================================================
+       NUMERIC FIELD +/- 1
+    ===================================================== */
 
     if (
       ["purchasePrice", "sellingPrice", "quantity"].includes(
@@ -227,6 +291,8 @@ export default function AddStock() {
         const number = parseFloat(value) || 0;
 
         setValue(String(number + 1));
+
+        return;
       }
 
       if (event.key === "PageDown") {
@@ -237,6 +303,8 @@ export default function AddStock() {
         setValue(
           String(Math.max(0, number - 1))
         );
+
+        return;
       }
     }
   };
@@ -245,263 +313,240 @@ export default function AddStock() {
      SAVE STOCK
   ========================================================= */
 
-  const saveStock = async () => {
-    /* =======================================================
-       BRAND VALIDATION
-    ======================================================= */
+const saveStock = async () => {
+  /* =======================================================
+     BRAND VALIDATION
+  ======================================================= */
 
-    if (!brand.trim()) {
-      alert("Brand is required");
+  if (!brand.trim()) {
+    alert("Brand is required");
+    inputRefs.current.brand?.focus();
+    return;
+  }
 
-      inputRefs.current.brand?.focus();
+  /* =======================================================
+     QUANTITY VALIDATION
+  ======================================================= */
 
-      return;
+  if (!quantity.trim()) {
+    alert("Quantity is required");
+    inputRefs.current.quantity?.focus();
+    return;
+  }
+
+  const quantityNumber = Number(quantity);
+
+  if (
+    !Number.isInteger(quantityNumber) ||
+    quantityNumber <= 0
+  ) {
+    alert("Quantity must be a whole number greater than 0");
+    inputRefs.current.quantity?.focus();
+    return;
+  }
+
+  try {
+    setSaving(true);
+
+    /* =====================================================
+       SUPER ADMIN
+       ALWAYS SEND ROLE AS superadmin
+    ===================================================== */
+
+    const role = "superadmin";
+
+    console.log("USER ROLE:", role);
+
+    /* =====================================================
+       COMMON DATA
+    ===================================================== */
+
+    let body = {
+      role: "superadmin",
+
+      category: selectedCategory,
+
+      brand: brand.trim(),
+
+      purchase_price:
+        purchasePrice === ""
+          ? 0
+          : Number(purchasePrice),
+
+      selling_price:
+        sellingPrice === ""
+          ? 0
+          : Number(sellingPrice),
+
+      quantity: quantityNumber,
+    };
+
+    /* =====================================================
+       FRAMES
+    ===================================================== */
+
+    if (selectedCategory === "frames") {
+      body = {
+        ...body,
+
+        frame_name: frameName.trim(),
+
+        model: model.trim(),
+
+        color: color.trim(),
+
+        size: size.trim(),
+
+        material: material.trim(),
+
+        gender: gender.trim(),
+
+        rack_for_lenses: rackForLenses.trim(),
+      };
     }
 
-    /* =======================================================
-       QUANTITY VALIDATION
-    ======================================================= */
+    /* =====================================================
+       LENSES
+    ===================================================== */
 
-    if (!quantity.trim()) {
-      alert("Quantity is required");
+    if (selectedCategory === "lenses") {
+      body = {
+        ...body,
 
-      inputRefs.current.quantity?.focus();
+        lens_type: lensType.trim(),
 
-      return;
+        power_range: powerRange.trim(),
+
+        coating: coating.trim(),
+
+        index: index.trim(),
+      };
     }
 
-    const quantityNumber = Number(quantity);
+    /* =====================================================
+       CONTACT LENSES
+    ===================================================== */
 
-    if (
-      !Number.isInteger(quantityNumber) ||
-      quantityNumber <= 0
-    ) {
-      alert(
-        "Quantity must be a whole number greater than 0"
-      );
+    if (selectedCategory === "contact_lenses") {
+      body = {
+        ...body,
 
-      inputRefs.current.quantity?.focus();
+        type: clType.trim(),
 
-      return;
+        power: power.trim(),
+
+        base_curve: baseCurve.trim(),
+
+        diameter: diameter.trim(),
+
+        expiry_date: expiryDate || null,
+      };
     }
+
+    /* =====================================================
+       ACCESSORIES
+    ===================================================== */
+
+    if (selectedCategory === "accessories") {
+      body = {
+        ...body,
+
+        accessory_name: accessoryName.trim(),
+      };
+    }
+
+    /* =====================================================
+       DEBUG
+    ===================================================== */
+
+    console.log("====================================");
+    console.log("SAVE STOCK BODY:", body);
+    console.log("ROLE:", body.role);
+    console.log("CATEGORY:", body.category);
+    console.log("====================================");
+
+    /* =====================================================
+       API REQUEST
+    ===================================================== */
+
+    const response = await fetch(
+      `${API_BASE}/stockinventory/add`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify(body),
+      }
+    );
+
+    /* =====================================================
+       RESPONSE
+    ===================================================== */
+
+    let result;
 
     try {
-      setSaving(true);
-
-      /* =====================================================
-         STORE CODE
-
-         Change this if your React JS application stores
-         store code under another localStorage key.
-      ===================================================== */
-
-      const storeCode =
-        localStorage.getItem("storeCode") ||
-        localStorage.getItem("store_code") ||
-        "";
-
-      if (!storeCode) {
-        alert("Store code is required");
-
-        setSaving(false);
-
-        return;
-      }
-
-      /* =====================================================
-         COMMON DATA
-      ===================================================== */
-
-      let body = {
-        storeCode,
-        category: selectedCategory,
-        brand: brand.trim(),
-
-        purchase_price:
-          Number(purchasePrice) || 0,
-
-        selling_price:
-          Number(sellingPrice) || 0,
-
-        quantity: quantityNumber,
-      };
-
-      /* =====================================================
-         FRAMES
-      ===================================================== */
-
-      if (selectedCategory === "frames") {
-        body = {
-          ...body,
-
-          frame_name: frameName.trim(),
-          model: model.trim(),
-          color: color.trim(),
-          size: size.trim(),
-          material: material.trim(),
-          gender: gender.trim(),
-          rack_for_lenses:
-            rackForLenses.trim(),
-        };
-      }
-
-      /* =====================================================
-         LENSES
-      ===================================================== */
-
-      else if (selectedCategory === "lenses") {
-        body = {
-          ...body,
-
-          lens_type: lensType.trim(),
-          power_range: powerRange.trim(),
-          coating: coating.trim(),
-          index: index.trim(),
-        };
-      }
-
-      /* =====================================================
-         CONTACT LENSES
-      ===================================================== */
-
-      else if (
-        selectedCategory === "contact_lenses"
-      ) {
-        body = {
-          ...body,
-
-          type: clType.trim(),
-          power: power.trim(),
-          base_curve: baseCurve.trim(),
-          diameter: diameter.trim(),
-          expiry_date: expiryDate,
-        };
-      }
-
-      /* =====================================================
-         ACCESSORIES
-      ===================================================== */
-
-      else if (
-        selectedCategory === "accessories"
-      ) {
-        body = {
-          ...body,
-
-          accessory_name:
-            accessoryName.trim(),
-        };
-      }
-
-      console.log("SAVE STOCK BODY:", body);
-
-      /* =====================================================
-         API
-      ===================================================== */
-
-      const response = await fetch(
-        `${API_BASE}/stockinventory/add`,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify(body),
-        }
-      );
-
-      const result = await response.json();
-
-      console.log("SAVE STOCK RESPONSE:", result);
-
-      /* =====================================================
-         SUCCESS
-      ===================================================== */
-
-      if (result.success) {
-        alert("Stock added successfully");
-
-        resetForm();
-
-        navigate(-1);
-
-        return;
-      }
-
-      /* =====================================================
-         API ERROR
-      ===================================================== */
-
-      alert(
-        result.message ||
-          "Failed to save stock"
-      );
-    } catch (error) {
+      result = await response.json();
+    } catch (jsonError) {
       console.error(
-        "SAVE STOCK ERROR:",
-        error
+        "INVALID JSON RESPONSE:",
+        jsonError
       );
 
-      alert(
-        "Error saving stock. Please try again."
-      );
-    } finally {
-      setSaving(false);
+      alert(`Server error (${response.status})`);
+
+      return;
     }
-  };
 
-  /* =========================================================
-     FIELD COMPONENT
-  ========================================================= */
-
-  const InputField = ({
-    fieldKey,
-    label,
-    value,
-    onChange,
-    placeholder,
-    required = false,
-    type = "text",
-  }) => {
-    return (
-      <div className="stock-field">
-        <label>
-          {label}
-
-          {required && (
-            <span className="required-star">
-              *
-            </span>
-          )}
-        </label>
-
-        <input
-          ref={(element) =>
-            setInputRef(fieldKey, element)
-          }
-          type={type}
-          value={value}
-          placeholder={
-            placeholder || label
-          }
-          onChange={(event) =>
-            onChange(event.target.value)
-          }
-          onKeyDown={(event) =>
-            handleKeyDown(
-              event,
-              fieldKey,
-              value,
-              onChange
-            )
-          }
-          autoComplete="off"
-        />
-      </div>
+    console.log(
+      "SAVE STOCK RESPONSE:",
+      result
     );
-  };
+
+    /* =====================================================
+       SUCCESS
+    ===================================================== */
+
+    if (response.ok && result.success) {
+      alert(
+        "Super Admin stock added successfully"
+      );
+
+      resetForm();
+
+      navigate(-1);
+
+      return;
+    }
+
+    /* =====================================================
+       API ERROR
+    ===================================================== */
+
+    alert(
+      result.message ||
+      "Failed to save stock"
+    );
+
+  } catch (error) {
+    console.error(
+      "SAVE STOCK ERROR:",
+      error
+    );
+
+    alert(
+      "Error saving stock. Please try again."
+    );
+
+  } finally {
+    setSaving(false);
+  }
+};
+
+
 
   /* =========================================================
      RENDER
@@ -513,6 +558,19 @@ export default function AddStock() {
 
         * {
           box-sizing: border-box;
+        }
+
+        html,
+        body,
+        #root {
+          margin: 0;
+          padding: 0;
+          min-height: 100%;
+        }
+
+        button,
+        input {
+          font-family: inherit;
         }
 
         .add-stock-page {
@@ -567,7 +625,7 @@ export default function AddStock() {
         }
 
         /* =====================================================
-           MAIN CONTENT
+           MAIN
         ===================================================== */
 
         .add-stock-wrapper {
@@ -653,6 +711,8 @@ export default function AddStock() {
           box-shadow:
             0 8px 28px rgba(15, 23, 42, 0.07);
           border: 1px solid #e2e8f0;
+          position: relative;
+          z-index: 2;
         }
 
         /* =====================================================
@@ -714,13 +774,16 @@ export default function AddStock() {
 
         .stock-fields-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns:
+            repeat(2, minmax(0, 1fr));
           gap: 4px 18px;
         }
 
         .stock-field {
           width: 100%;
           margin-bottom: 12px;
+          position: relative;
+          z-index: 3;
         }
 
         .stock-field label {
@@ -732,15 +795,27 @@ export default function AddStock() {
         }
 
         .stock-field input {
+          display: block;
           width: 100%;
           height: 46px;
+
           border: 1px solid #e2e8f0;
+
           background: #f8fafc;
+
           border-radius: 12px;
+
           padding: 0 14px;
+
           color: #0f172a;
+
           font-size: 14px;
+
           outline: none;
+
+          position: relative;
+          z-index: 4;
+
           transition:
             border-color 0.2s ease,
             box-shadow 0.2s ease,
@@ -758,8 +833,14 @@ export default function AddStock() {
         .stock-field input:focus {
           background: white;
           border-color: #3b82f6;
+
           box-shadow:
-            0 0 0 3px rgba(59, 130, 246, 0.12);
+            0 0 0 3px
+            rgba(59, 130, 246, 0.12);
+        }
+
+        .stock-field input[type="number"] {
+          appearance: auto;
         }
 
         /* =====================================================
@@ -770,22 +851,29 @@ export default function AddStock() {
           border-top: 1px solid #f1f5f9;
           margin-top: 15px;
           padding-top: 18px;
+
           display: flex;
           justify-content: flex-end;
           align-items: center;
+
           gap: 12px;
         }
 
         .cancel-button {
           height: 46px;
           padding: 0 22px;
+
           border: none;
           border-radius: 12px;
+
           background: #f1f5f9;
           color: #64748b;
+
           font-size: 14px;
           font-weight: 700;
+
           cursor: pointer;
+
           transition: 0.2s ease;
         }
 
@@ -797,37 +885,51 @@ export default function AddStock() {
         .save-button {
           height: 46px;
           padding: 0 25px;
+
           border: none;
           border-radius: 12px;
-          background: linear-gradient(
-            135deg,
-            #3b82f6,
-            #1d4ed8
-          );
+
+          background:
+            linear-gradient(
+              135deg,
+              #3b82f6,
+              #1d4ed8
+            );
+
           color: white;
+
           font-size: 14px;
           font-weight: 700;
+
           cursor: pointer;
+
           display: flex;
           align-items: center;
           justify-content: center;
+
           gap: 8px;
+
           min-width: 135px;
+
           box-shadow:
-            0 5px 14px rgba(37, 99, 235, 0.22);
+            0 5px 14px
+            rgba(37, 99, 235, 0.22);
+
           transition: 0.2s ease;
         }
 
         .save-button:hover:not(:disabled) {
           transform: translateY(-1px);
+
           box-shadow:
-            0 8px 18px rgba(37, 99, 235, 0.28);
+            0 8px 18px
+            rgba(37, 99, 235, 0.28);
         }
 
-        .save-button:disabled {
+        .save-button:disabled,
+        .cancel-button:disabled {
           opacity: 0.65;
           cursor: not-allowed;
-          transform: none;
         }
 
         .save-icon {
@@ -836,16 +938,23 @@ export default function AddStock() {
         }
 
         /* =====================================================
-           LOADING SPINNER
+           SPINNER
         ===================================================== */
 
         .button-spinner {
           width: 17px;
           height: 17px;
-          border: 2px solid rgba(255,255,255,0.35);
+
+          border:
+            2px solid
+            rgba(255, 255, 255, 0.35);
+
           border-top-color: white;
+
           border-radius: 50%;
-          animation: spin 0.7s linear infinite;
+
+          animation:
+            spin 0.7s linear infinite;
         }
 
         @keyframes spin {
@@ -855,11 +964,10 @@ export default function AddStock() {
         }
 
         /* =====================================================
-           MOBILE
+           TABLET
         ===================================================== */
 
         @media (max-width: 700px) {
-
           .add-stock-page {
             padding: 10px;
           }
@@ -923,8 +1031,11 @@ export default function AddStock() {
           }
         }
 
-        @media (max-width: 430px) {
+        /* =====================================================
+           SMALL MOBILE
+        ===================================================== */
 
+        @media (max-width: 430px) {
           .stock-fields-grid {
             grid-template-columns: 1fr;
           }
@@ -947,9 +1058,9 @@ export default function AddStock() {
             DECORATION
         ===================================================== */}
 
-        <div className="decor-circle top"></div>
-        <div className="decor-circle bottom"></div>
-        <div className="decor-circle center"></div>
+        <div className="decor-circle top" />
+        <div className="decor-circle bottom" />
+        <div className="decor-circle center" />
 
         <div className="add-stock-wrapper">
 
@@ -958,7 +1069,6 @@ export default function AddStock() {
           =================================================== */}
 
           <div className="stock-header">
-
             <div className="header-content">
 
               <button
@@ -971,23 +1081,18 @@ export default function AddStock() {
               </button>
 
               <div className="header-text">
-
-                <h1>
-                  Add New Stock
-                </h1>
+                <h1>Add New Stock</h1>
 
                 <p>
                   Select category and enter inventory details
                 </p>
-
               </div>
 
             </div>
-
           </div>
 
           {/* ===================================================
-              FORM CARD
+              FORM
           =================================================== */}
 
           <div className="stock-form-card">
@@ -998,9 +1103,7 @@ export default function AddStock() {
 
             <label className="section-label">
               Select Category
-              <span className="required-star">
-                *
-              </span>
+              <span className="required-star">*</span>
             </label>
 
             <div className="category-tabs">
@@ -1023,13 +1126,11 @@ export default function AddStock() {
                   label: "Accessories",
                 },
               ].map((category) => (
-
                 <button
                   key={category.key}
                   type="button"
                   className={
-                    selectedCategory ===
-                    category.key
+                    selectedCategory === category.key
                       ? "category-tab active"
                       : "category-tab"
                   }
@@ -1041,13 +1142,12 @@ export default function AddStock() {
                 >
                   {category.label}
                 </button>
-
               ))}
 
             </div>
 
             {/* =================================================
-                FORM FIELDS
+                INPUTS
             ================================================= */}
 
             <div className="stock-fields-grid">
@@ -1062,6 +1162,8 @@ export default function AddStock() {
                 required
                 value={brand}
                 onChange={setBrand}
+                inputRefs={inputRefs}
+                handleKeyDown={handleKeyDown}
               />
 
               {/* =================================================
@@ -1075,6 +1177,8 @@ export default function AddStock() {
                     label="Frame Name"
                     value={frameName}
                     onChange={setFrameName}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1082,6 +1186,8 @@ export default function AddStock() {
                     label="Gender"
                     value={gender}
                     onChange={setGender}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1091,6 +1197,8 @@ export default function AddStock() {
                     type="number"
                     value={purchasePrice}
                     onChange={setPurchasePrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1100,6 +1208,8 @@ export default function AddStock() {
                     type="number"
                     value={sellingPrice}
                     onChange={setSellingPrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1110,6 +1220,8 @@ export default function AddStock() {
                     type="number"
                     value={quantity}
                     onChange={setQuantity}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
                 </>
               )}
@@ -1125,6 +1237,8 @@ export default function AddStock() {
                     label="Lens Type"
                     value={lensType}
                     onChange={setLensType}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1132,6 +1246,8 @@ export default function AddStock() {
                     label="Power Range"
                     value={powerRange}
                     onChange={setPowerRange}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1139,6 +1255,8 @@ export default function AddStock() {
                     label="Coating"
                     value={coating}
                     onChange={setCoating}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1146,6 +1264,8 @@ export default function AddStock() {
                     label="Index"
                     value={index}
                     onChange={setIndex}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1156,6 +1276,8 @@ export default function AddStock() {
                     type="number"
                     value={quantity}
                     onChange={setQuantity}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1165,6 +1287,8 @@ export default function AddStock() {
                     type="number"
                     value={purchasePrice}
                     onChange={setPurchasePrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1174,6 +1298,8 @@ export default function AddStock() {
                     type="number"
                     value={sellingPrice}
                     onChange={setSellingPrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
                 </>
               )}
@@ -1182,14 +1308,15 @@ export default function AddStock() {
                   CONTACT LENSES
               ================================================= */}
 
-              {selectedCategory ===
-                "contact_lenses" && (
+              {selectedCategory === "contact_lenses" && (
                 <>
                   <InputField
                     fieldKey="clType"
                     label="Type"
                     value={clType}
                     onChange={setClType}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1199,6 +1326,8 @@ export default function AddStock() {
                     type="number"
                     value={purchasePrice}
                     onChange={setPurchasePrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1208,6 +1337,8 @@ export default function AddStock() {
                     type="number"
                     value={sellingPrice}
                     onChange={setSellingPrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1218,6 +1349,8 @@ export default function AddStock() {
                     type="number"
                     value={quantity}
                     onChange={setQuantity}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
                 </>
               )}
@@ -1226,8 +1359,7 @@ export default function AddStock() {
                   ACCESSORIES
               ================================================= */}
 
-              {selectedCategory ===
-                "accessories" && (
+              {selectedCategory === "accessories" && (
                 <>
                   <InputField
                     fieldKey="accessoryName"
@@ -1235,6 +1367,8 @@ export default function AddStock() {
                     required
                     value={accessoryName}
                     onChange={setAccessoryName}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1244,6 +1378,8 @@ export default function AddStock() {
                     type="number"
                     value={purchasePrice}
                     onChange={setPurchasePrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1253,6 +1389,8 @@ export default function AddStock() {
                     type="number"
                     value={sellingPrice}
                     onChange={setSellingPrice}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
 
                   <InputField
@@ -1263,6 +1401,8 @@ export default function AddStock() {
                     type="number"
                     value={quantity}
                     onChange={setQuantity}
+                    inputRefs={inputRefs}
+                    handleKeyDown={handleKeyDown}
                   />
                 </>
               )}
@@ -1270,7 +1410,7 @@ export default function AddStock() {
             </div>
 
             {/* =================================================
-                ACTION BUTTONS
+                BUTTONS
             ================================================= */}
 
             <div className="action-buttons">
@@ -1293,7 +1433,7 @@ export default function AddStock() {
 
                 {saving ? (
                   <>
-                    <span className="button-spinner"></span>
+                    <span className="button-spinner" />
                     Saving...
                   </>
                 ) : (
@@ -1311,9 +1451,7 @@ export default function AddStock() {
             </div>
 
           </div>
-
         </div>
-
       </div>
     </>
   );

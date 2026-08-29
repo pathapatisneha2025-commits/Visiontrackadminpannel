@@ -68,7 +68,7 @@ export default function Inventory() {
       setLoading(true);
 
       const response = await fetch(
-        `${API_BASE}/stockinventory/all`
+        `${API_BASE}/stockinventory/super-admin/all`
       );
 
       const result = await response.json();
