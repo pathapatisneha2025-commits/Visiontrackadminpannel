@@ -25,6 +25,9 @@ import Sales from "./Pages/OpticalSales";
 import NewOrder from "./Pages/NewOrder";
 import BillingOrders from "./Pages/Billing";
 import FollowUpReminders from "./Pages/Followup";
+import ExpenseTracker from "./Pages/Expensestracker ";
+import Inventory from "./Pages/Stockinventory";
+import AddStock from "./Pages/AddStock";
 
 
 
@@ -164,10 +167,26 @@ function App() {
             path="followup" 
             element={<FollowUpReminders/>} 
           />
+          <Route 
+            path="stockinventory" 
+            element={<Inventory/>} 
+            
+          />
 
+            <Route 
+            path="add-stock" 
+            element={<AddStock/>} 
+            
+          />
           <Route 
             path="billing" 
             element={<BillingOrders/>} 
+            
+          />
+            <Route 
+            path="expensetracker" 
+            element={<ExpenseTracker/>} 
+            
           />
           {/* Settings */}
 

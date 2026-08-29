@@ -1678,59 +1678,71 @@ const completedOrders = useMemo(() => {
      LATEST PATIENT ORDER
   ======================================================= */
 
-  const getPatientLatestOrder =
-    (patient) => {
+/* =======================================================
+   GET PATIENT LATEST ORDER - SUPER ADMIN
+======================================================= */
 
-      const patientOrders =
-        orders.filter((o) => {
+const getPatientLatestOrder = (patient) => {
 
-          return (
-            String(
-              o.patient_id || ""
-            ) ===
-              String(
-                patient.patient_id ||
-                ""
-              ) ||
+  if (!patient) {
+    return null;
+  }
 
-            String(
-              o.mobile || ""
-            ) ===
-              String(
-                patient.mobile ||
-                ""
-              ) ||
+  const patientId = String(
+    patient.patient_id || ""
+  ).trim();
 
-            (
-              o.patient_name &&
-              patient.name &&
-              o.patient_name
-                .toLowerCase() ===
-              patient.name
-                .toLowerCase()
-            )
-          );
-        });
+  const patientDatabaseId = String(
+    patient.id || ""
+  ).trim();
 
-      if (!patientOrders.length) {
-        return null;
-      }
+  const patientOrders = orders.filter((order) => {
 
-      return [...patientOrders].sort(
-        (a, b) =>
-          new Date(
-            b.order_date ||
-            b.created_at ||
-            0
-          ) -
-          new Date(
-            a.order_date ||
-            a.created_at ||
-            0
-          )
-      )[0];
-    };
+    const orderPatientId = String(
+      order.patient_id || ""
+    ).trim();
 
+    // Match exact patient_id
+    if (
+      patientId &&
+      orderPatientId === patientId
+    ) {
+      return true;
+    }
+
+    // Match database ID if applicable
+    if (
+      patientDatabaseId &&
+      orderPatientId === patientDatabaseId
+    ) {
+      return true;
+    }
+
+    return false;
+  });
+
+  if (patientOrders.length === 0) {
+    return null;
+  }
+
+  return [...patientOrders].sort((a, b) => {
+
+    const dateA = new Date(
+      a.created_at ||
+      a.order_date ||
+      0
+    );
+
+    const dateB = new Date(
+      b.created_at ||
+      b.order_date ||
+      0
+    );
+
+    return dateB - dateA;
+
+  })[0];
+};
   /* =======================================================
      SHOULD SHOW PATIENT
   ======================================================= */
@@ -2341,108 +2353,95 @@ const filteredHistoryOrders =
   /* =======================================================
      PAYMENT
   ======================================================= */
+const payRemainingBalance = async () => {
+  if (!selectedOrder || !payAmount) {
+    alert("Please enter payment amount.");
+    return;
+  }
 
-  const payRemainingBalance =
-    async () => {
+  try {
+    const total = Number(
+      selectedOrder.total_amount || 0
+    );
 
-      if (
-        !selectedOrder ||
-        !payAmount
-      ) {
+    const oldPaid = Number(
+      selectedOrder.advance_paid || 0
+    );
 
-        alert(
-          "Please enter payment amount."
-        );
+    const newPaid =
+      oldPaid + Number(payAmount);
 
-        return;
-      }
+    const remaining =
+      total - newPaid;
 
-      try {
+    const role = String(
+      localStorage.getItem("role") || ""
+    ).toLowerCase();
 
-        const storeCode =
-          await getStoreCode();
+    let url;
+    let body;
 
-        const total =
-          Number(
-            selectedOrder.total_amount ||
-            0
-          );
+    if (role === "superadmin") {
+      // SUPER ADMIN → NO STORE CODE
+      url = `${API_BASE}/super-admin/opticalorders/payment/${selectedOrder.id}`;
 
-        const oldPaid =
-          Number(
-            selectedOrder.advance_paid ||
-            0
-          );
+      body = {
+        advance_paid: newPaid,
+        payment_status:
+          remaining <= 0 ? "Paid" : "Due",
+      };
+    } else {
+      // NORMAL STORE ADMIN → STORE CODE REQUIRED
+      const storeCode = await getStoreCode();
 
-        const newPaid =
-          oldPaid +
-          Number(payAmount);
+      url =
+        `${API_BASE}/opticalorders/payment/${selectedOrder.id}`;
 
-        const remaining =
-          total - newPaid;
+      body = {
+        storeCode,
+        advance_paid: newPaid,
+        payment_status:
+          remaining <= 0 ? "Paid" : "Due",
+      };
+    }
 
-        const res = await fetch(
-          `${API_BASE}/opticalorders/payment/${selectedOrder.id}`,
-          {
-            method: "PUT",
+    const res = await fetch(url, {
+      method: "PUT",
 
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
+      headers: {
+        "Content-Type": "application/json",
+      },
 
-            body: JSON.stringify({
+      body: JSON.stringify(body),
+    });
 
-              storeCode,
+    const data = await res.json();
 
-              advance_paid:
-                newPaid,
+    if (data.success) {
+      alert("Balance payment updated.");
 
-              payment_status:
-                remaining <= 0
-                  ? "Paid"
-                  : "Due"
-            })
-          }
-        );
+      setPaymentModal(false);
+      setPayAmount("");
 
-        const data =
-          await res.json();
+      await loadOrders();
+      await loadAllHistoryOrders();
+    } else {
+      alert(
+        data.message ||
+          "Payment update failed."
+      );
+    }
+  } catch (error) {
+    console.log(
+      "Payment Error:",
+      error
+    );
 
-        if (data.success) {
-
-          alert(
-            "Balance payment updated."
-          );
-
-          setPaymentModal(false);
-
-          setPayAmount("");
-
-          await loadOrders();
-
-          await loadAllHistoryOrders();
-        } else {
-
-          alert(
-            data.message ||
-            "Payment update failed."
-          );
-        }
-
-      } catch (error) {
-
-        console.log(
-          "Payment Error:",
-          error
-        );
-
-        alert(
-          "Unable to update payment."
-        );
-      }
-    };
-
+    alert(
+      "Unable to update payment."
+    );
+  }
+};
   /* =======================================================
      OPEN NEW ORDER
   ======================================================= */

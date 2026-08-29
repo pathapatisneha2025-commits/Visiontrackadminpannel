@@ -440,12 +440,25 @@ onClick={closeMenu}
 >
 Followup
 </NavLink>
+<NavLink 
+to="/admin/stockinventory"
+onClick={closeMenu}
+>
+Stock
+</NavLink>
 
 <NavLink 
 to="/admin/billing"
 onClick={closeMenu}
 >
 Billing
+</NavLink>
+
+<NavLink 
+to="/admin/expensetracker"
+onClick={closeMenu}
+>
+Expensestracker
 </NavLink>
 </div>
 
